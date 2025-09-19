@@ -1,5 +1,5 @@
 CORRECTION_PROMPT = """
-The previous output had a formatting issue. Please correct it and return a valid YAML output.
+The previous output had a formatting issue. Please correct it and return a valid output.
 
 ===Original Output Begin===
 {original_output}
@@ -9,12 +9,12 @@ The previous output had a formatting issue. Please correct it and return a valid
 {error_description}
 ===Error Description End===
 
-Your response must be a single, valid YAML block that conforms to the format instructions.
+Your response must be a single, valid block that conforms to the format instructions.
 ===FORMAT INSTRUCTIONS BEGIN===
 {format_instructions}
 ===FORMAT INSTRUCTIONS END===
 
-Corrected YAML Output:
+Corrected Output:
 """
 
 ERROR_REFLECTION_PROMPT= """
@@ -23,10 +23,10 @@ Following is the pydantic basemodel used for parsing llm output:
 {base_model}
 ===Basemodel End===
 
-The LLM output(in yml format) had the following structuring issue:
+The LLM output had the following structuring issue:
 
 ===Structuring Issue Begin===
-{yaml_format_issues}
+{format_issues}
 ===Structuring Issue End===
 
 Please analyze the issue and provide a brief passage describing:
