@@ -1,3 +1,7 @@
+"""
+Author: Prophet System Team
+"""
+
 CORRECTION_PROMPT = """
 The previous output had a formatting issue. Please correct it and return a valid output.
 

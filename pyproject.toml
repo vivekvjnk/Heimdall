@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "heimdall"
-version = "0.1.0"
+version = "1.0"
 description = "LLM validation wrapper"
 authors = [{ name = "prophet_system_team", email = "vivekvjnk@gmail.com" }]
 readme = "README.md"

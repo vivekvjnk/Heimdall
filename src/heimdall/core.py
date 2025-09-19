@@ -35,7 +35,7 @@ Example:
 
 heimdall_graph
 ===
-Convinent wrapper function around structured_output_validator 
+Convinient wrapper function around structured_output_validator 
 This interface handles langgraph graph object creation, prompt template processing, graph invoke, and structured output collection. This is a good reference example on how to use structured_output_validator interface.
 
 Inputs:
@@ -62,11 +62,11 @@ from .prompts import CORRECTION_PROMPT,ERROR_REFLECTION_PROMPT
 
 
 class HeimdallState(TypedDict):
-    messages: List=[]
-    llm_output:str=""
-    error_status:bool=False
-    error_description:str=""
-    iterations:int=0
+    messages: List
+    llm_output:str
+    error_status:bool
+    error_description:str
+    iterations:int
 
 # --- Private Helper Function ---
 def _extract_response_text(response) -> str:
@@ -84,16 +84,31 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
                                 parser=None
                                 ) -> Runnable:
     """
-    Creates a LangGraph subgraph that validates and corrects the output of a runnable.
-
-    Args:
-        module_to_validate (Runnable): The LangGraph module whose output needs validation.
-        pydantic_model (Type[BaseModel]): The Pydantic model for validating the output.
-        correction_llm (Runnable): An LLM instance used for reflecting on and correcting errors.
-        max_retries (int): The maximum number of correction attempts.
-
+    Creates langgraph graph object. Cyclic graph with error correction loop for LLM structuring issues.
+    Inputs: 
+        - pydantic_model: Pydantic basemodel, defines the LLM output format, Required argument
+        - llm: LLM model, Should be a langchain runnable, Tested with OllamaLLM and ChatVertexAI from langchain, Required argument
+        - thinking_model: Thinking LLM model, Should be a langchain runnable, Tested with ChatVertexAI, If system fails to resolve structuring issues, fallback mechanism would defer task of error correction to a more powerful model(given thinking_model parameter is not null). 
+        - callbacks: Any callbacks that needs to be passed to the LLM runnable, optional argument
+        - trace_id: Unique trace id for the module call, used for observability, optional argument
+        - parser: Langchain output parser object, Should be initialized with the pydantic basemodel, If not provided system would use YamlOutputParser by default, optional argument
     Returns:
-        Runnable: A compiled LangGraph application ready to be used as a subgraph.
+        - Langgraph graph object (Runnable)
+
+    Inputs for the Langgraph graph object:
+        - Dictionary of type HeimdallState
+            - `messages` should be filled with a valid list of langchain prompts 
+            - All other parameters are reserved for internal usage
+            - Final structured output can be found in `llm_output` 
+    Example:
+        ```python
+        messages = [("system","You are a helpful assistant"),("human","Hello there!!!")]
+        # NB: ChatVertexAI doesn't support `system` prompts 
+        h_graph = structured_output_validator(llm=llm,pydantic_model=pydantic_object)
+        state= {"messages":messages}
+        result = h_graph.invoke(h_graph)
+        final_output = result['llm_output']
+            ```
     """
     logger = logging.getLogger(__name__)
     if parser:
@@ -110,7 +125,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
 
     def initial_module_call(state: HeimdallState) -> HeimdallState:
         loc_state = state
-        loc_state['iterations'] += 1
+        loc_state['iterations'] = 1
         chain_kwargs = {"config":{"callbacks": callbacks, "metadata": {"langfuse_session_id": trace_id}} if trace_id else {}}
         llm_response = module.invoke({"messages":loc_state['messages']},**chain_kwargs)
         metadata = llm_response.response_metadata if hasattr(llm_response, 'response_metadata') else {}
@@ -202,6 +217,17 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
     return workflow.compile()
 
 def heimdall_graph(pydantic_object,llm,input_vars,prompt):
+    """
+    Convinient wrapper function around structured_output_validator 
+    This interface handles langgraph graph object creation, prompt template processing, graph invoke, and structured output collection. This is a good reference example on how to use structured_output_validator interface.
+
+    Inputs:
+        - pydantic_object : Pydantic model for output structure validation
+        - llm : LLM object, Langchain runnable
+        - input_vars : Dictionary of input variables, These variables will be filled in the prompt template using string.format() method. Make sure input_vars is provided as a dictionary, it will be passed to string.format() method as **kwargs
+        - prompt : The prompt template
+    *Refer tests/unit_test.py for example*
+    """
     yaml_parser = YamlOutputParser(pydantic_object=pydantic_object)
     
     s_prompt_template = HumanMessagePromptTemplate(
