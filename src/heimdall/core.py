@@ -151,7 +151,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
     return workflow.compile()
 
 def heimdall_graph(pydantic_object,llm,input_vars,prompt):
-    yaml_parser = PstYamlOutputParser(pydantic_object=pydantic_object)
+    yaml_parser = YamlOutputParser(pydantic_object=pydantic_object)
     
     s_prompt_template = HumanMessagePromptTemplate(
                                     prompt=PromptTemplate(
@@ -164,7 +164,7 @@ def heimdall_graph(pydantic_object,llm,input_vars,prompt):
     heimdall_state = {"messages":messages,"iterations":0}
 
     heimdall_graph = structured_output_validator(llm=llm,
-                                                pydantic_model=EntityExtractionOutput)
+                                                pydantic_model=pydantic_object)
     result = heimdall_graph.invoke(heimdall_state).get("llm_output")
     return result
 
