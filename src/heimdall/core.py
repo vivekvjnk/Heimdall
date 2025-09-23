@@ -1,5 +1,5 @@
 
-import re,yaml,logging,inspect
+import re,yaml,logging,inspect,random,time
 from typing import List, Type
 from pydantic import BaseModel
 from typing_extensions import TypedDict
@@ -11,6 +11,11 @@ from langchain_core.prompts import (ChatPromptTemplate,
                                     HumanMessagePromptTemplate,
                                     MessagesPlaceholder)   
 from .prompts import CORRECTION_PROMPT,ERROR_REFLECTION_PROMPT
+
+from google.api_core.exceptions import ResourceExhausted
+
+
+logger = logging.getLogger(__name__)
 
 
 class HeimdallState(TypedDict):
@@ -150,7 +155,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
     )
     return workflow.compile()
 
-def heimdall_graph(pydantic_object,llm,input_vars,prompt):
+def heimdall_graph(pydantic_object,llm,input_vars,prompt,max_retries = 10):
     yaml_parser = YamlOutputParser(pydantic_object=pydantic_object)
     
     s_prompt_template = HumanMessagePromptTemplate(
@@ -165,8 +170,25 @@ def heimdall_graph(pydantic_object,llm,input_vars,prompt):
 
     heimdall_graph = structured_output_validator(llm=llm,
                                                 pydantic_model=pydantic_object)
-    result = heimdall_graph.invoke(heimdall_state).get("llm_output")
-    return result
+    
+    retries = 0
+    while True:
+        try:
+            # Invoke the model with the current state.
+            # The input to the model will be the `wrapped_state` from your graph.
+            result = heimdall_graph.invoke(heimdall_state).get("llm_output")
+            return result # Return the result in a format the graph expects.
+        except ResourceExhausted as e:
+            retries += 1
+            if retries > max_retries:
+                logger.error(f"Failed after {max_retries} retries.")
+                raise e
+            
+            # Exponential backoff with jitter
+            delay = (2 ** retries) + random.uniform(0, 1)
+            logger.warning(f"Resource exhausted. Waiting {delay:.2f}s before retrying...")
+            time.sleep(delay)
+    
 
 
 
