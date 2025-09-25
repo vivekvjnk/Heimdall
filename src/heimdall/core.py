@@ -58,8 +58,8 @@ from langchain_core.prompts import (ChatPromptTemplate,
                                     PromptTemplate,
                                     HumanMessagePromptTemplate,
                                     MessagesPlaceholder)   
-from .prompts import CORRECTION_PROMPT,ERROR_REFLECTION_PROMPT
-
+from .helpers.prompts import CORRECTION_PROMPT,ERROR_REFLECTION_PROMPT
+from .helpers.pst_yaml_parser import PstYamlOutputParser
 
 class HeimdallState(TypedDict):
     messages: List
@@ -114,7 +114,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
     if parser:
         output_parser = parser
     else: # Default to yaml output parser
-        output_parser = YamlOutputParser(pydantic_object=pydantic_model)
+        output_parser = PstYamlOutputParser(pydantic_object=pydantic_model)
 
     chat_prompt = ChatPromptTemplate.from_messages(
                 [MessagesPlaceholder(variable_name="messages")]
@@ -137,7 +137,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
     
     def output_check(state: HeimdallState) -> str:
         """Parses and validates the output against the Pydantic model."""
-        logger.debug("---Heimdall:{__name__}---")
+        logger.debug(f"---Heimdall:{__name__}---")
         loc_state = state
         llm_output_text = _extract_response_text(loc_state["llm_output"])
 
@@ -152,7 +152,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
             data = yaml.safe_load(cleaned_text)
             validated_output = pydantic_model(**data)
             
-            loc_state["llm_output"] = validated_output.dict() # Store the validated dictionary
+            loc_state["llm_output"] = validated_output.model_dump() # Store the validated dictionary
             loc_state["error_status"] = False
             logger.debug("Validation successful.")
 
@@ -167,7 +167,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
         loc_state = state
         logger.debug(f"\n------Heimdall:{__name__}:i={loc_state['iterations']}------\n")
         loc_state['iterations'] += 1
-        correction_prompt = CORRECTION_PROMPT.format(original_output= _extract_response_text(state['llm_output']),error_description= state['error_description'],format_instructions=output_parser.get_format_instructions())
+        correction_prompt = CORRECTION_PROMPT.format(original_output= _extract_response_text(state['llm_output']),error_description= state['error_description'],format_instructions=output_parser.get_format_instructions(few_shot_examples=False))
         message = [('human',correction_prompt)]
         logger.debug(f"Correction prompt: {correction_prompt}")
         
@@ -187,6 +187,7 @@ def structured_output_validator(pydantic_model: Type[BaseModel],
         logger.debug("---REFLECTING ON ERROR---")
         loc_state = state
         reflection_prompt = ERROR_REFLECTION_PROMPT.format(base_model=str(inspect.getsource(pydantic_model)),format_issues=loc_state['error_description'])
+        logger.debug(f"Error reflection prompt:\n {reflection_prompt}\n---Error reflection prompt---\n")
         reflection = llm.invoke(reflection_prompt)
         # Prepend the reflection to the error description for the next correction attempt
         loc_state["error_description"] = f"\n{loc_state['error_description']}\n---Fix Suggestion Begin---\n {_extract_response_text(reflection)}\n---Fix Suggestion End---"
@@ -228,7 +229,7 @@ def heimdall_graph(pydantic_object,llm,input_vars,prompt):
         - prompt : The prompt template
     *Refer tests/unit_test.py for example*
     """
-    yaml_parser = YamlOutputParser(pydantic_object=pydantic_object)
+    yaml_parser = PstYamlOutputParser(pydantic_object=pydantic_object)
     
     s_prompt_template = HumanMessagePromptTemplate(
                                     prompt=PromptTemplate(
